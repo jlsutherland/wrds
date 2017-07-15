@@ -20,7 +20,7 @@ class SchemaNotFoundError(FileNotFoundError):
     pass
 
 class Connection(object):
-    def __init__(self):
+    def __init__(self, **kwargs):
         """
         Establish the connection to the database. This will use the .pgpass file if the user has set one up. If not,
         it will ask the user for a username and password. It will also direct the user to information on setting up
@@ -35,7 +35,11 @@ class Connection(object):
         Loading library list...
         Done
         """
-        self.engine = sa.create_engine('postgresql://wrds-pgdata.wharton.upenn.edu:9737/wrds', connect_args={'sslmode': 'require'}) 
+        if kwargs.get('username') and kwargs.get('password'):
+            conn_string = 'postgresql://{}:{}@wrds-pgdata.wharton.upenn.edu:9737/wrds'.format(kwargs.get('username'), kwargs.get('password'))
+        else:
+            conn_string = 'postgresql://wrds-pgdata.wharton.upenn.edu:9737/wrds'
+        self.engine = sa.create_engine(conn_string, connect_args={'sslmode': 'require'})
         try:
             self.engine.connect()
         except Exception as e:
@@ -77,20 +81,20 @@ class Connection(object):
             access. Raise other error if the schema does not exist.
 
             Else, return True
-            
+
             :param schema: Postgres schema name.
             :rtype: bool
-            
+
         """
-        
+
         if schema in self.schema_perm:
             return True
         else:
             if schema in self.insp.get_schema_names():
                 raise NotSubscribedError("You do not have permission to access the {} library".format(schema))
             else:
-                raise SchemaNotFoundError("The {} library is not found.".format(schema)) 
-    
+                raise SchemaNotFoundError("The {} library is not found.".format(schema))
+
     def list_libraries(self):
         """
             Return all the libraries (schemas) the user can access.
@@ -164,19 +168,19 @@ class Connection(object):
 
     def get_row_count(self, library, table):
         """
-            Uses the library and table to get the approximate row count for the table. 
-            
+            Uses the library and table to get the approximate row count for the table.
+
             :param library: Postgres schema name.
             :param table: Postgres table name.
 
             :rtype: int
-    
+
             Usage::
             >>> db.get_row_count('wrdssec', 'dforms')
             16378400
         """
         schema = self.__get_schema_for_view(library, table)
-        if schema: 
+        if schema:
             sqlstmt = """
                 select reltuples from pg_class r JOIN pg_namespace n on (r.relnamespace = n.oid)
                 where r.relkind = 'r' and n.nspname = '{}' and r.relname = '{}';
